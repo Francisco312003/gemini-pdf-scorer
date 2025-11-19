@@ -1,10 +1,3 @@
-# =============================================================================
-# SLR AUTOMÁTICA HÍBRIDA - Versión FINAL (Noviembre 2025)
-# Autor:
-# Stack: Gemini 1.5 Pro + Semantic Scholar API + pdfplumber + pandas
-# Objetivo: Puntuar ~200 PDFs según rúbrica PC1-PC5 y guardar en Excel
-# =============================================================================
-
 import time
 import json
 import logging
