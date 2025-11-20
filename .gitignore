@@ -1,0 +1,30 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Entornos Virtuales ---
+venv/
+env/
+.venv/
+.env
+
+# --- IDEs (PyCharm / VS Code) ---
+.idea/
+.vscode/
+*.iml
+
+# --- Logs y Archivos Temporales ---
+*.log
+*.pot
+*.mo
+
+# --- Archivos de Datos/Cache Específicos ---
+semantic_scholar_cache.pkl
+*.pkl
+.DS_Store
+
+# --- Archivos de Sistema ---
+Thumbs.db
+Desktop.ini
