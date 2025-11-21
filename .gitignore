@@ -28,3 +28,11 @@ semantic_scholar_cache.pkl
 # --- Archivos de Sistema ---
 Thumbs.db
 Desktop.ini
+
+# --- Datos Locales (No subir a la nube) ---
+*.xlsx
+*.csv
+
+# --- Carpetas de Prueba ---
+test_pdfs/
+pdfs_to_analyze/
