@@ -60,6 +60,22 @@ df_scimago = pd.read_csv(SCIMAGO_PATH, sep=';', on_bad_lines='skip')
 df_scimago['Title_lower'] = df_scimago['Title'].str.lower().str.strip()
 logger.info(f"Scimago cargado: {len(df_scimago)} registros")
 
+# ----------------- CARGA DE CORE CSV -----------------
+CORE_PATH = Path("CORE.csv")
+if CORE_PATH.exists():
+    df_core = pd.read_csv(CORE_PATH, sep=',', quotechar='"', on_bad_lines='skip', header=None)
+    df_core['ID'] = df_core[0]
+    df_core['Name'] = df_core[1]
+    df_core['Acronym'] = df_core[2]
+    df_core['Source'] = df_core[3]
+    df_core['Rank'] = df_core[4]
+    df_core['Name_lower'] = df_core['Name'].str.lower().str.strip()
+    df_core['Acronym_lower'] = df_core['Acronym'].str.lower().str.strip()
+    logger.info(f"CORE cargado: {len(df_core)} registros")
+else:
+    df_core = None
+    logger.warning(f"No se encontró {CORE_PATH}. CORE no se usará para conferencias.")
+
 # ----------------- CARGA DE LINKS DESDE OTRO EXCEL -----------------
 LINKS_PATH = Path(r"C:\Users\richa\Desktop\Proyecto_SLR\LINK SLR.xlsx")
 if LINKS_PATH.exists():
@@ -164,7 +180,7 @@ def evaluar_con_ia(texto_pdf: str) -> Optional[Dict[str, Any]]:
     logger.error("Todos los modelos fallaron.")
     return None
 
-# ----------------- PC1 -----------------
+# ----------------- PC1 (CON CORE AUTOMATIZADO) -----------------
 def obtener_score_pc1(venue_nombre: str, venue_tipo: str) -> Tuple[float, str]:
     if not venue_nombre or venue_nombre.strip() == "":
         return 0.0, "Sin venue detectado"
@@ -172,7 +188,31 @@ def obtener_score_pc1(venue_nombre: str, venue_tipo: str) -> Tuple[float, str]:
     venue_tipo = venue_tipo.lower().strip()
 
     if venue_tipo == "conference":
-        return 0.0, "Conferencia → revisar CORE manualmente"
+        if df_core is None:
+            return 0.0, "Conferencia → revisar CORE manualmente (CSV no encontrado)"
+        # Match en Name
+        matches = process.extractOne(
+            venue_nombre.lower().strip(),
+            df_core['Name_lower'],
+            scorer=fuzz.token_sort_ratio
+        )
+        logger.info(f"Match CORE Name para '{venue_nombre}': {matches[1] if matches else 0}%")
+        if matches and matches[1] >= 70:  # Bajado a 70%
+            rank = df_core[df_core['Name_lower'] == matches[0]]['Rank'].iloc[0]
+            score = 1.0 if rank in ['A*', 'A'] else 0.5 if rank in ['B', 'C'] else 0.0
+            return score, f"CORE {rank} ({matches[1]}% match on Name)"
+        # Fallback a Acronym si no match en Name
+        matches_acro = process.extractOne(
+            venue_nombre.lower().strip(),
+            df_core['Acronym_lower'],
+            scorer=fuzz.token_sort_ratio
+        )
+        logger.info(f"Match CORE Acronym para '{venue_nombre}': {matches_acro[1] if matches_acro else 0}%")
+        if matches_acro and matches_acro[1] >= 70:
+            rank = df_core[df_core['Acronym_lower'] == matches_acro[0]]['Rank'].iloc[0]
+            score = 1.0 if rank in ['A*', 'A'] else 0.5 if rank in ['B', 'C'] else 0.0
+            return score, f"CORE {rank} ({matches_acro[1]}% match on Acronym)"
+        return 0.0, f"No encontrado en CORE (Name score: {matches[1] if matches else 0}, Acronym score: {matches_acro[1] if matches_acro else 0})"
 
     if venue_tipo not in ["journal", "unknown"]:
         return 0.0, f"Tipo raro: {venue_tipo}"
@@ -183,7 +223,7 @@ def obtener_score_pc1(venue_nombre: str, venue_tipo: str) -> Tuple[float, str]:
         scorer=fuzz.token_sort_ratio
     )
 
-    if matches and matches[1] >= 80:
+    if matches and matches[1] >= 70:  # Bajado a 70% para Scimago
         row = df_scimago[df_scimago['Title_lower'] == matches[0]].iloc[0]
         quartile = row.get('SJR Best Quartile', row.get('Quartile', 'Unknown'))
         score = 1.0 if quartile in ['Q1', 'Q2'] else 0.5 if quartile in ['Q3', 'Q4'] else 0.0
@@ -278,14 +318,15 @@ def procesar_pdfs_y_guardar_excel(
         eva = {item["id"]: item for item in datos_ia.get("evaluacion", [])}
         textos = datos_ia.get("textos", {})
 
-        pc1_score, pc1_just = obtener_score_pc1(ext.get("venue_nombre", ""), ext.get("venue_tipo", "unknown"))
+        venue_nombre = ext.get("venue_nombre", "")
+        pc1_score, pc1_just = obtener_score_pc1(venue_nombre, ext.get("venue_tipo", "unknown"))
         pc2_score, pc2_just, citas, ano = obtener_score_pc2(ext.get("titulo_articulo", ""), ext.get("ano_publicacion", None))
 
-        if ext.get("venue_tipo", "").lower() == "conference":
+        if ext.get("venue_tipo", "").lower() == "conference" and pc1_score == 0.0 and "No encontrado" in pc1_just:
             conferencias_pendientes.append({
                 "archivo": pdf_path.name,
                 "titulo": ext.get("titulo_articulo", ""),
-                "venue": ext.get("venue_nombre", ""),
+                "venue": venue_nombre,
                 "año": ano
             })
 
@@ -316,8 +357,8 @@ def procesar_pdfs_y_guardar_excel(
         pc3_data = eva.get("PC3", {"puntaje": 0, "justificacion": "Fallo IA"})
         pc4_data = eva.get("PC4", {"puntaje": 0, "justificacion": "Fallo IA"})
         pc5_data = eva.get("PC5", {"puntaje": 0, "justificacion": "Fallo IA"})
-        observacion = f"PC1: {pc1_just}; PC2: {pc2_just}; PC3: {pc3_data['justificacion']}; PC4: {pc4_data['justificacion']}; PC5: {pc5_data['justificacion']}"
-        fila[3] = observacion[:500]
+        observacion = f"Venue: {venue_nombre}; PC1: {pc1_just}; PC2: {pc2_just}; PC3: {pc3_data['justificacion']}; PC4: {pc4_data['justificacion']}; PC5: {pc5_data['justificacion']}"
+        fila[3] = observacion  # Removido [:500] para completitud
 
         # PC1: Poner score en la casilla correspondiente
         if pc1_score == 1.0:
