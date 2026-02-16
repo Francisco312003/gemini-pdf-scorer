@@ -1,6 +1,6 @@
-# 📄 DocuRank: AI-Powered PDF Evaluator
+# 📄 Gemini pdf scorer: AI-Powered PDF Evaluator
 
-**DocuRank** es una herramienta automatizada que analiza, puntúa y clasifica documentos académicos (PDFs) utilizando la inteligencia artificial de **Google Gemini**.
+**Gemini pdf scorer** es una herramienta automatizada que analiza, puntúa y clasifica documentos académicos (PDFs) utilizando la inteligencia artificial de **Google Gemini**.
 
 Diseñado para investigadores y desarrolladores que necesitan procesar grandes volúmenes de literatura científica y extraer insights estructurados en formato JSON.
 
